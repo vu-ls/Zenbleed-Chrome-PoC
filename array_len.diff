@@ -1,0 +1,68 @@
+diff --git a/src/builtins/builtins-array.cc b/src/builtins/builtins-array.cc
+index 408c77bc7ac..f7c2182512a 100644
+--- a/src/builtins/builtins-array.cc
++++ b/src/builtins/builtins-array.cc
+@@ -405,6 +405,25 @@ BUILTIN(ArrayPush) {
+   return *isolate->factory()->NewNumberFromUint((new_length));
+ }
+ 
++BUILTIN(ArrayLen) {
++  uint32_t len = args.length();
++  if(len != 2) return ReadOnlyRoots(isolate).undefined_value();
++
++  Handle<JSReceiver> receiver;
++  ASSIGN_RETURN_FAILURE_ON_EXCEPTION(
++      isolate, receiver, Object::ToObject(isolate, args.receiver()));
++  Handle<JSArray> array = Handle<JSArray>::cast(receiver);
++
++  Handle<Object> argLen;
++  ASSIGN_RETURN_FAILURE_ON_EXCEPTION(
++      isolate, argLen, Object::ToNumber(isolate, args.at<Object>(1)));
++  Tagged<Smi> newLen = (*Object::ToNumber(isolate,argLen).ToHandleChecked()).ToSmi();
++
++  auto raw = *array;
++  raw->set_length(newLen);
++  return ReadOnlyRoots(isolate).undefined_value();
++}
++
+ namespace {
+ 
+ V8_WARN_UNUSED_RESULT Tagged<Object> GenericArrayPop(Isolate* isolate,
+diff --git a/src/builtins/builtins-definitions.h b/src/builtins/builtins-definitions.h
+index d56b0218583..84a6a4d5ced 100644
+--- a/src/builtins/builtins-definitions.h
++++ b/src/builtins/builtins-definitions.h
+@@ -409,6 +409,7 @@ namespace internal {
+   TFJ(ArrayPrototypePop, kDontAdaptArgumentsSentinel)                          \
+   /* ES6 #sec-array.prototype.push */                                          \
+   CPP(ArrayPush)                                                               \
++  CPP(ArrayLen)                                                                \
+   TFJ(ArrayPrototypePush, kDontAdaptArgumentsSentinel)                         \
+   /* ES6 #sec-array.prototype.shift */                                         \
+   CPP(ArrayShift)                                                              \
+diff --git a/src/compiler/typer.cc b/src/compiler/typer.cc
+index 30e53c87a72..c86b16a1b52 100644
+--- a/src/compiler/typer.cc
++++ b/src/compiler/typer.cc
+@@ -1920,6 +1920,8 @@ Type Typer::Visitor::JSCallTyper(Type fun, Typer* t) {
+       return Type::Receiver();
+     case Builtin::kArrayPush:
+       return t->cache_->kPositiveSafeInteger;
++    case Builtin::kArrayLen:
++      return Type::Receiver();
+     case Builtin::kArrayPrototypeReverse:
+     case Builtin::kArrayPrototypeSlice:
+       return Type::Receiver();
+diff --git a/src/init/bootstrapper.cc b/src/init/bootstrapper.cc
+index a926a1e3b08..536b28af5f8 100644
+--- a/src/init/bootstrapper.cc
++++ b/src/init/bootstrapper.cc
+@@ -1855,6 +1855,8 @@ void Genesis::InitializeGlobal(Handle<JSGlobalObject> global_object,
+                           0, false);
+     SimpleInstallFunction(isolate_, proto, "push", Builtin::kArrayPrototypePush,
+                           1, false);
++    SimpleInstallFunction(isolate_, proto, "len", Builtin::kArrayLen,
++                          2, false);
+     SimpleInstallFunction(isolate_, proto, "reverse",
+                           Builtin::kArrayPrototypeReverse, 0, false);
+     SimpleInstallFunction(isolate_, proto, "shift",
